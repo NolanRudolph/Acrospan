@@ -43,18 +43,16 @@ int main(int argc, char *argv[])
     acr_pairs[key] = val;
   }
 
+  // Connection string
+  ostringstream connect_oss;
+  string connect;
+  connect_oss << "dbname = template1 user = " << argv[2] << " password = " << argv[3];
+  connect_oss << " hostaddr = 127.0.0.1 port = 5432";
+  connect = connect_oss.str();
+
   // Connecting to PostgreSQL
   try
   {
-    char user[50];
-    char pass[50];
-    strcpy(user, argv[2]);
-    strcpy(pass, argv[3]);
-    char connect[200] = "dbname = template1 user = ";
-    strcat(connect, user);
-    strcat(connect, " password = ");
-    strcat(connect, pass);
-    strcat(connect, " hostaddr = 127.0.0.1 port = 5432");
 
     pqxx::connection C(connect);
     ostringstream sql_oss;
@@ -63,8 +61,8 @@ int main(int argc, char *argv[])
     {
       cout << "Opened database successfully: " << C.dbname() << endl;
       char sql[100] = "CREATE TABLE IF NOT EXISTS ACRONYMS(" \
-                      "ACRO   CHAR(10) NOT NULL," \
-                      "EXPAND CHAR(100) NOT NULL);";
+                      "ACRO   CHAR(10) UNIQUE," \
+                      "EXPAND CHAR(100) UNIQUE);";
       pqxx::work W(C);
       W.exec(sql);
       W.commit();
@@ -73,10 +71,12 @@ int main(int argc, char *argv[])
       map<string, string>::iterator it;
       for (it = acr_pairs.begin(); it != acr_pairs.end(); it++)
       {
-        sql_oss << "INSERT INTO ACRONYMS (ACRO,EXPAND) (" << it->first << "," << it->second << ");";
+        sql_oss << "INSERT INTO ACRONYMS (ACRO,EXPAND) VALUES (\'" \
+                << it->first << "\', \'" << it->second << "\') " \
+                << "ON CONFLICT DO NOTHING";
         sql_oss_str = sql_oss.str();
         pqxx::work W(C);
-        W.exec(sql);
+        W.exec(sql_oss_str);
         W.commit();
         cout << "Table updated successfully | " << it->first << " : " << it->second << endl;
       }
@@ -119,9 +119,27 @@ int main(int argc, char *argv[])
       if (cnt > 1)
       {
         cout << "Acro is: " << acro << endl;
+        ostringstream sql_oss;
+        string sql_oss_str;
         if (acr_pairs.find(acro) != acr_pairs.end())
         {
-          string val = acr_pairs[acro];
+          sql_oss << "SELECT * FROM ACRONYMS WHERE ACRO=\'" << acro << "\';";
+          pqxx::connection C(connect);
+          pqxx::nontransaction N(C);
+          sql_oss_str = sql_oss.str();
+          pqxx::result R(N.exec(sql_oss_str));
+          string key;
+          string val;
+          for (pqxx::result::const_iterator c = R.begin(); c != R.end(); ++c)
+          {
+            key = c[0].as<string>();
+            val = c[1].as<string>();
+            cout << "Found " << key << " | " << val << " from table" << endl;
+          }
+
+          val.erase(remove(val.begin(), val.end(), ' '), val.end());
+          val.erase(remove(val.begin(), val.end(), '\n'), val.end());
+
           j -= cnt;
           for (int k = 0; k < val.length(); ++k)
           {
