@@ -55,8 +55,6 @@ int main(int argc, char *argv[])
   {
 
     pqxx::connection C(connect);
-    ostringstream sql_oss;
-    string sql_oss_str;
     if (C.is_open()) 
     {
       cout << "Opened database successfully: " << C.dbname() << endl;
@@ -71,6 +69,8 @@ int main(int argc, char *argv[])
       map<string, string>::iterator it;
       for (it = acr_pairs.begin(); it != acr_pairs.end(); it++)
       {
+        ostringstream sql_oss;
+        string sql_oss_str;
         sql_oss << "INSERT INTO ACRONYMS (ACRO,EXPAND) VALUES (\'" \
                 << it->first << "\', \'" << it->second << "\') " \
                 << "ON CONFLICT DO NOTHING";
@@ -128,6 +128,7 @@ int main(int argc, char *argv[])
           pqxx::nontransaction N(C);
           sql_oss_str = sql_oss.str();
           pqxx::result R(N.exec(sql_oss_str));
+          sql_oss.flush();
           string key;
           string val;
           for (pqxx::result::const_iterator c = R.begin(); c != R.end(); ++c)
